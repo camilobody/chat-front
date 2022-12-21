@@ -113,9 +113,14 @@ export default function App() {
   const [showPreviewLoader, setShowPreviewLoader] = useState(false);
   const [firstNameUserAdmin, setFirstNameUserAdmin] = useState();
   const [lastNameUserAdmin, setLastNameUserAdmin] = useState();
+  const [firstNameUser, setFirstNameUser] = useState();
+  const [lastNameUser, setLastNameUser] = useState();
   const [tokenUser, setTokenUser] = useState();
   const [tokenUserAdmin, setTokenUserAdmin] = useState();
   const [channel, setChannel] = useState();
+  const [userIdForm, setUserIdForm] = useState();
+  const [userOrAdmin, setUserOrAdmin] = useState();
+  
 
 
   // UseRef ----------------------------------
@@ -173,11 +178,13 @@ export default function App() {
     // const currentToken = localStorage.getItem("firebaseToken");
     const getUserToken = async () => {
       // console.log('2.1');
+      const response = await getRandomById();
+      const currentUserAdmin = response.data.results[0];
       const submitData = {
-        id: userAdminId,
-        first_name: firstNameUserAdmin,
-        last_name: lastNameUserAdmin,
-        role_id: 1, // Rol unico de este proyecto (Chat de prueba para escritorio con el back-chat de bodytech)
+        id: currentUserAdmin.login.uuid,
+        first_name: currentUserAdmin.name.first,
+        last_name: currentUserAdmin.name.last,
+        role_id: 39, // Rol unico de este proyecto (Chat de prueba para escritorio con el back-chat de bodytech)
         device: "pc",
         type: "web",
         id_member: null,
@@ -189,15 +196,17 @@ export default function App() {
         await addUserToken(submitData);
         console.log('promesa 2-> Usuario creado en rethinkdb con token');
         console.log('POST /users');
-        console.log('Data del usuario creado en rethinkdb = ', submitData);
+        console.log('Data del usuario(administrador) creado en rethinkdb = ', submitData);
+        setUserAdminId(currentUserAdmin.login.uuid);
+        setNameUserAdmin(`${submitData.first_name} ${submitData.last_name}`);
       } catch (error) {
         console.log(error);
       }
     };
-    if (userAdminId){
+    if (tokenUserAdmin){
       getUserToken();  
     }else{
-      console.log('Por favor selecciona uno de los usuarios para obtener el token del usuario');
+      console.log('Por favor selecciona el usuario administrador para obtener el token del usuario');
     }
     return () => {
       socket.disconnect();
@@ -334,22 +343,23 @@ export default function App() {
   }, [currentTerm]);
 
   // Obtener mensajes
-  // useEffect(() => {
-  //   console.log('11-> obtener mensajes del canal ingresado');
-  //   if (currentChannel) {
-  //     const getMessages = async () => {
-  //       try {
-  //         const response = await getMessagesByChannelId(currentChannel);
-  //         setMessageList(response.data.data);
-  //         setMessage("");
-  //         scrollToBottom();
-  //       } catch (error) {
-  //         console.log(error);
-  //       }
-  //     };
-  //     getMessages();
-  //   }
-  // }, [currentChannel, reload]);
+  useEffect(() => {
+    console.log('11-> obtener mensajes del canal ingresado');
+    console.log('currentChannel = ', currentChannel);
+    if (currentChannel) {
+      const getMessages = async () => {
+        try {
+          const response = await getMessagesByChannelId(currentChannel);
+          setMessageList(response.data.data);
+          setMessage("");
+          // scrollToBottom();
+        } catch (error) {
+          console.log(error);
+        }
+      };
+      getMessages();
+    }
+  }, [currentChannel, reload]);
 
   // Obtener usuarios habilitados
   useEffect(() => {
@@ -379,44 +389,46 @@ export default function App() {
 
   // Funciones ---------------------
 
-  // Inicializa un usuario(administrativo) y inicializar un canal
-  const handleJoinChatUserAdmin = async () => {
-    console.log('Boton nuevo usuario (administrador) handleJoinChatUserAdmin enter');
+  // Inicializa un usuario y inicializar un canal con el id del usuario administrador
+  const handleJoinChatUser = async (event) => {
+    event.preventDefault();
+    console.log('Boton nuevo usuario handleJoinChatUser enter');
     try {
       const response = await getRandomById();
       const currentUser = response.data.results[0];
+      const idUserAdmin = userIdForm;
       const submitData = {
         first_name: currentUser.name.first,
         last_name: currentUser.name.last || "",
-        id: (currentUser.location.street.number * currentUser.dob.age),
+        id: (currentUser.location.street.number * currentUser.dob.age), // id_member en rethinkdb es numerico
         photo: currentUser.picture.large || "",
         email: currentUser.email || "",
         mobile_phone: currentUser.phone || "",
         document_number: currentUser.id.value || "",
         id_service_line: 5501,
-        id_user: currentUser.login.uuid,
+        id_user: idUserAdmin,
       };
-      const currentToken = randomToken(16);
       try {
         await addMember(submitData);
-        console.log('1) Creado nuevo usuario administrativo');
+        console.log('1) Creado nuevo usuario');
         console.log('POST /members');
-        console.log('Data de usuario nuevo administrativo = ', submitData);
+        console.log('Data de usuario nuevo = ', submitData);
         const responseChannel = await startChannel({
           id: submitData.id,
           id_service_line: 5501,
-          id_user: currentUser.login.uuid,
+          id_user: idUserAdmin,
         });
         console.log('2) Creado canal nuevo');
         console.log('POST /channels');
         console.log('Data de canal nuevo', responseChannel);
         if (responseChannel.data.id_channel) {
           localStorage.setItem("localChannel", responseChannel.data.id_channel);
-          setUserAdminId(submitData.id_user);
-          setNameUserAdmin(`${submitData.first_name} ${submitData.last_name}`);
-          setFirstNameUserAdmin(submitData.first_name);
-          setLastNameUserAdmin(submitData.last_name);
-          setTokenUserAdmin(currentToken);
+          setNameUser(`${submitData.first_name} ${submitData.last_name}`);
+          setFirstNameUser(submitData.first_name);
+          setLastNameUser(submitData.last_name);
+          setUserId(submitData.id);
+          setUserAdminId(idUserAdmin);
+          setUserOrAdmin('User');
           // history.push("/chat");
         }
       } catch (err) {
@@ -427,38 +439,15 @@ export default function App() {
     }
   };
 
-  // Inicializa un usuario(administrativo) y inicializar un canal
-  const handleJoinChatUser = async () => {
-    console.log('Boton nuevo usuario handleJoinChatUser enter');
+  // Inicializa un usuario(administrativo)
+  const handleJoinChatUserAdmin = async () => {
+    console.log('Boton nuevo usuario (administrador) handleJoinChatUserAdmin enter');
+    const currentToken = randomToken(16);
     try {
-      const response = await getRandomById();
-      const currentMember = response.data.results[0];
-      const currentToken = randomToken(16);
-      const submitData = {
-        first_name: currentMember.name.first,
-        last_name: currentMember.name.last || "",
-        id: (currentMember.location.street.number * currentMember.dob.age),
-        photo: currentMember.picture.large || "",
-        email: currentMember.email || "",
-        mobile_phone: currentMember.phone || "",
-        document_number: currentMember.id.value || "",
-        type: "web",
-        token: currentToken,
-        device: "pc"
-      };
-      try {
-        await addMember(submitData);
-        console.log('1) Creado nuevo usuario');
-        console.log('POST /members');
-        console.log('Data de usuario nuevo = ', submitData);
-        setUserId(currentMember.login.uuid);
-        setNameUser(`${submitData.first_name} ${submitData.last_name}`);
-        setTokenUser(currentToken);
-      } catch (err) {
-        console.log(err);
-      }
-    } catch (err) {
-      console.log(err);
+      setTokenUserAdmin(currentToken);
+      setUserOrAdmin('Admin');
+    } catch (error) {
+      console.log(error);
     }
   };
 
@@ -490,11 +479,11 @@ export default function App() {
     if (message) {
       const messageData = {
         id_channel: currentChannel,
-        author: userAdminId,
+        author: userOrAdmin === 'Admin' ? userAdminId : userId,
         content: message,
         type: "text",
         author_type: "back", // este author_type (back) es para que no entre en notificaciones por el lado del API y no de error porque no estamos en un dispositivo movil
-        author_name: nameUserAdmin,
+        author_name: userOrAdmin === 'Admin' ? nameUserAdmin : nameUser,
         create_at: new Date(Date.now() - tzoffset).toISOString().slice(0, -1),
       };
       try {
@@ -598,16 +587,8 @@ export default function App() {
     if (channel){
       try {
           console.log(channel);
-          const responseChannel = await startChannel({
-            id: channel,
-            id_service_line: 5501,
-          });
-          setChannelList(responseChannel.data.data);
-          setCurrentChannel(responseChannel.data.data);
-          setChannelHistory((current) => [...current, responseChannel.data.data]);
+          setCurrentChannel(channel);
           console.log('2) Asignando canal seleccionado');
-          console.log('POST /channels');
-          console.log('Data de canal', responseChannel);
       } catch (error) {
         console.log(error);
       }
@@ -664,26 +645,37 @@ export default function App() {
             }}type="button" onClick={handleJoinChatUserAdmin}>
               Usuario Administrativo
             </button>
-            <button style={{"minWidth": "130px",
-                            "height": "40px",
-                            "color": "#fff",
-                            "padding": "5px 10px",
-                            "fontWeight": "bold",
-                            "cursor": "pointer",
-                            "transition": "all 0.3s ease",
-                            "position": "relative",
-                            "display": "inline-block",
-                            "outline": "none",
-                            "borderRadius": "5px",
-                            "border": "none",
-                            "background": "#3d348b",
-                            "boxShadow": "0 5px #2c0b8e"
-            }}type="button" onClick={handleJoinChatUser}>
-              Usuario
-            </button>
+            <form onSubmit={handleJoinChatUser} className="bg-zinc-900 p-10" style={{margin: "1%", display: "flex", flexDirection: "column"}}>
+              <input
+                name="userId"
+                type="text"
+                placeholder="Escribe un userId o Bot..."
+                onChange={(e) => setUserIdForm(e.target.value)}
+                className="border-2 border-zinc-500 p-2 w-full text-black"
+                value={userIdForm || ''}
+                autoFocus
+                style={{marginBottom: "5px"}}
+              />
+              <button style={{"minWidth": "130px",
+                              "height": "40px",
+                              "color": "#fff",
+                              "padding": "5px 10px",
+                              "fontWeight": "bold",
+                              "cursor": "pointer",
+                              "transition": "all 0.3s ease",
+                              "position": "relative",
+                              "display": "inline-block",
+                              "outline": "none",
+                              "borderRadius": "5px",
+                              "border": "none",
+                              "background": "#3d348b",
+                              "boxShadow": "0 5px #2c0b8e"
+              }}type="submit">
+                Usuario
+              </button>
+            </form>
           </div>
         </div>
-
         <div className="bg-zinc-900 p-10" style={{display: "flex", "flexDirection": "column", margin: "1%"}}>
           <p style={{textAlign: "center", margin: "1%"}}>
             Usuario
@@ -710,11 +702,10 @@ export default function App() {
             Canales del usuario administrador
           </p>
           <form onSubmit={assignChannel} className="bg-zinc-900 p-10" style={{margin: "1%"}}>
-            <h1 className="text-2xl font-bold my-2">Escribe el canal al que quieres conectarte</h1>
             <input
               name="channel"
               type="text"
-              placeholder="Write your channel..."
+              placeholder="Write the channel ..."
               onChange={(e) => setChannel(e.target.value)}
               className="border-2 border-zinc-500 p-2 w-full text-black"
               value={channel || ''}
@@ -742,18 +733,34 @@ export default function App() {
             autoFocus
           />
 
-          <ul className="h-80 overflow-y-auto">
-            {messageList.map((message, index) => (
-              <li
-                key={index}
-                className={`my-2 p-2 table text-sm rounded-md ${
-                  message.author === userAdminId ? "bg-sky-700 ml-auto" : "bg-black"
-                }`}
-              >
-                <b>{message.author_name}</b> : {message.content}
-              </li>
-            ))}
-          </ul>
+          { userOrAdmin === 'Admin' 
+            ?
+            <ul className="h-80 overflow-y-auto">
+              {messageList.map((message, index) => (
+                <li
+                  key={index}
+                  className={`my-2 p-2 table text-sm rounded-md ${
+                    message.author === userAdminId ? "bg-sky-700 ml-auto" : "bg-black"
+                  }`}
+                >
+                  <b>{message.author_name}</b> : {message.content}
+                </li>
+              ))}
+            </ul> 
+            :
+            <ul className="h-80 overflow-y-auto">
+              {messageList.map((message, index) => (
+                <li
+                  key={index}
+                  className={`my-2 p-2 table text-sm rounded-md ${
+                    message.author === userId ? "bg-sky-700 ml-auto" : "bg-black"
+                  }`}
+                >
+                  <b>{message.author_name}</b> : {message.content}
+                </li>
+              ))}
+            </ul>
+          }
         </form>
 
       </div>
