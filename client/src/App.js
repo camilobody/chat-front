@@ -3,14 +3,14 @@ import io from "socket.io-client";
 import axios from "axios";
 import randomToken from "random-token";
 
-const socket = io("http://localhost:3025");
+const socket = io("http://localhost:3001");
 // const socket = io("/");
 
 // ------------------ START NEW CODE ------------------
 
 // Conexion por axios al API
 const axiosInstanceChat = axios.create({
-  baseURL: 'http://localhost:3025',
+  baseURL: 'http://localhost:3001',
 });
 
 const axiosInstanceNewUser = axios.create({
